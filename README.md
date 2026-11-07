@@ -14,6 +14,16 @@ Everything is in one file: `index.html`. Open it in any web browser. No install,
 
 There's also a **true or false** question button for quick ones.
 
+## Question packs
+
+There are 15 packs of ready-made questions for about age 8, with 32 questions in each: Animals, Maths, Space, Technology, Science, Minecraft, Zelda, Fortnite, Padel, Dinosaurs, Football, Human Body, Food, Around the World and Pokémon.
+
+- **Quick play**: open a pack and tap **Quick play** for 10 random questions.
+- **Make your own**: tap questions to pick them (or **Pick 10 at random**), then **Make a game**. You can change any question afterwards.
+- **Mix packs**: in the game editor, tap **Add from a question pack** as many times as you like.
+
+The questions live in the `PACKS` list near the bottom of `index.html`, so it's easy to add more.
+
 ## Playing
 
 Add everyone who's playing (Kahallum remembers them for next time), then pick a way to play:
