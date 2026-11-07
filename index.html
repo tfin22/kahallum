@@ -280,6 +280,13 @@ label.lbl { font-size: .85rem; text-transform: uppercase; letter-spacing: 1px; c
 .seg .dotsz { display: inline-block; background: var(--ink); border-radius: 50%; vertical-align: middle; }
 .drawing { display: block; margin: 0 auto; width: min(100%, 640px); height: auto; background: #fff; border: var(--line) solid var(--ink); border-radius: 16px; box-shadow: var(--pop); }
 .win-chip { background: var(--good); color: #fff; }
+.stage .drawing { width: min(100%, 640px, max(260px, calc((100vh - 470px) * 4 / 3))); width: min(100%, 640px, max(260px, calc((100dvh - 470px) * 4 / 3))); }
+.lose-chip { background: var(--bad); color: #fff; }
+.pad.replay { cursor: default; width: min(100%, max(260px, calc((100vh - 480px) * 4 / 3))); width: min(100%, max(260px, calc((100dvh - 480px) * 4 / 3))); }
+.options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 640px) { .options { grid-template-columns: 1fr 1fr; } }
+.options .answer { min-height: 64px; font-size: clamp(1.1rem, 3.2vw, 1.5rem); justify-content: center; text-align: center; padding: 10px; }
+.big-mark { font-size: clamp(3.5rem, 14vw, 6rem); line-height: 1; }
 .gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
 .gal-card { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 8px; font-family: var(--body); }
 .gal-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border: 2px solid var(--ink); border-radius: 10px; background: #fff; }
@@ -1710,6 +1717,7 @@ function confetti() {
    shouts out guesses, then the tablet is passed to the next artist.
    ================================================================== */
 const DRAW_TIMES = [45, 60, 90];
+const GUESS_TIME = 30;
 const INK = ["#1d1b3f", "#ff6b5e", "#ff9f1c", "#ffd23f", "#2bb24c", "#22c3a6", "#3a86ff", "#a98bff", "#ff7eb6", "#8d5a34", "#9aa0b5", "#ffffff"];
 const SIZES = [4, 10, 22];
 const CW = 800, CH = 600;
@@ -1873,6 +1881,7 @@ function renderDrawSetup() {
   if (!view.cats) view.cats = new Set(DRAW_CATS.map(c => c.id));
   view.rounds = view.rounds || 2;
   view.dtime = view.dtime || 60;
+  view.dmode = view.dmode || "shout";
   const count = selectedCount();
   const cats = DRAW_CATS.map(c => `
     <button class="cat ${view.cats.has(c.id) ? "on" : ""}" data-act="dcat" data-id="${c.id}" aria-pressed="${view.cats.has(c.id)}">
@@ -1884,6 +1893,19 @@ function renderDrawSetup() {
     <div class="row spread"><h2>✏️ Draw &amp; Guess</h2><button class="btn-small" data-act="home">✕ Back</button></div>
     <p class="muted">Take turns drawing a secret word on the tablet. Everyone else watches and shouts out guesses. Guess fast for more points!</p>
     ${playersPanel()}
+    <section class="stack">
+      <h3>How do you want to play?</h3>
+      <div class="mode-pick">
+        <button class="mode ${view.dmode === "shout" ? "on" : ""}" data-act="dmode" data-m="shout">
+          <b>🗣️ Shout it out</b>
+          <span>Everyone watches the artist draw and shouts out guesses. The artist taps who got it first.</span>
+        </button>
+        <button class="mode ${view.dmode === "pass" ? "on" : ""}" data-act="dmode" data-m="pass">
+          <b>🔁 Pass and guess</b>
+          <span>Draw in secret, then pass the tablet to the next player. They watch your drawing appear and pick the answer from a list. Then they draw for the next person.</span>
+        </button>
+      </div>
+    </section>
     <section class="panel stack">
       <div class="row spread"><h3>What to draw</h3>
         <div class="row"><button class="btn-small" data-act="dcatall">Pick all</button><button class="btn-small" data-act="dcatnone">Clear</button></div>
@@ -1897,7 +1919,7 @@ function renderDrawSetup() {
       <div class="row"><span class="lbl" style="margin:0;min-width:110px">Drawing time</span>
         <div class="seg" role="group" aria-label="Seconds to draw">${DRAW_TIMES.map(t => `<button class="${view.dtime === t ? "on" : ""}" data-act="dtime" data-t="${t}">${t}s</button>`).join("")}</div>
       </div>
-      <p class="muted">Everyone draws once per round${count >= 2 ? `, so that's <b>${count * view.rounds} drawings</b>` : ""}.</p>
+      <p class="muted">Everyone draws once${view.dmode === "pass" ? " and guesses once" : ""} per round${count >= 2 ? `, so that's <b>${count * view.rounds} drawings</b>` : ""}.</p>
     </section>
     ${count < 2 ? `<p class="warn">You need at least 2 players: one to draw and one to guess.</p>` : ""}
     ${view.cats.size ? "" : `<p class="warn">Pick at least one thing to draw.</p>`}
@@ -1908,14 +1930,14 @@ function renderDrawSetup() {
 }
 
 function startDraw(setup) {
-  setup = setup || { selected: view.selected, cats: view.cats, rounds: view.rounds, dtime: view.dtime };
+  setup = setup || { selected: view.selected, cats: view.cats, rounds: view.rounds, dtime: view.dtime, dmode: view.dmode };
   const players = store.family.filter(p => setup.selected.has(p.id)).map(p => ({ ...p, score: 0, gained: 0, streak: 0 }));
   if (players.length < 2) return;
   const seen = new Set();
   const words = shuffle(DRAW_CATS.filter(c => setup.cats.has(c.id)).flatMap(c => c.words.map(w => ({ w, cat: c }))))
     .filter(x => { const k = x.w.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   view = {
-    name: "draw", setup, players, words, wi: 0, turn: 0,
+    name: "draw", setup, players, words, wi: 0, turn: 0, mode: setup.dmode || "shout",
     rounds: setup.rounds, time: setup.dtime, total: setup.rounds * players.length,
     drawings: [], phase: "handoff"
   };
@@ -1936,8 +1958,52 @@ function newTurn() {
   view.saved = false;
   view.img = null;
   view.guesser = null;
+  view.pick = null;
+  view.options = null;
 }
 function drawer() { return view.players[view.turn % view.players.length]; }
+function guesserFor() { return view.players[(view.turn + 1) % view.players.length]; }
+
+// Six choices: the real word plus five from the same category.
+function makeOptions() {
+  const w = view.word.w.toLowerCase();
+  let pool = view.word.cat.words.filter(x => x.toLowerCase() !== w);
+  if (pool.length < 5) pool = pool.concat(DRAW_CATS.flatMap(c => c.words).filter(x => x.toLowerCase() !== w && !pool.includes(x)));
+  return shuffle([view.word.w, ...shuffle(pool).slice(0, 5)]);
+}
+
+// Draw the picture again, stroke by stroke, for the person guessing.
+function replayDrawing(cv) {
+  cv.width = CW; cv.height = CH;
+  const c = cv.getContext("2d", { willReadFrequently: true });
+  c.fillStyle = "#ffffff"; c.fillRect(0, 0, CW, CH);
+  const ops = view.strokes || [];
+  let first = 0;
+  for (let i = ops.length - 1; i >= 0; i--) if (ops[i].t === "clear") { first = i + 1; break; }
+  const steps = [];
+  for (const op of ops.slice(first)) {
+    if (op.t === "line") for (let k = 0; k < op.p.length; k += 2) steps.push([op, k]);
+    else if (op.t === "fill") steps.push([op, -1]);
+  }
+  const style = op => { c.strokeStyle = op.c; c.fillStyle = op.c; c.lineWidth = op.s; c.lineCap = "round"; c.lineJoin = "round"; };
+  const step = ([op, k]) => {
+    if (k < 0) { floodFill(c, op); return; }
+    style(op);
+    if (k === 0) { c.beginPath(); c.arc(op.p[0], op.p[1], op.s / 2, 0, Math.PI * 2); c.fill(); }
+    else { c.beginPath(); c.moveTo(op.p[k - 2], op.p[k - 1]); c.lineTo(op.p[k], op.p[k + 1]); c.stroke(); }
+  };
+  const ms = Math.min(8000, Math.max(2500, steps.length * 12));
+  const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) { steps.forEach(step); return; }
+  const start = performance.now();
+  let i = 0;
+  (function frame(now) {
+    if (!cv.isConnected) return;
+    const target = Math.min(steps.length, Math.ceil(steps.length * (now - start) / ms));
+    while (i < target) step(steps[i++]);
+    if (i < steps.length) requestAnimationFrame(frame);
+  })(start);
+}
 
 /* ---------- play ---------- */
 function drawTop() {
@@ -1956,7 +2022,7 @@ function renderDraw() {
         <p class="muted">Drawing ${view.turn + 1} of ${view.total}. Pass the tablet to…</p>
         <div class="big-av">${esc(d.av)}</div>
         <h1>${esc(d.name)}</h1>
-        <p>It's your turn to draw! Only you should look at the next screen.</p>
+        <p>${view.mode === "pass" ? `It's your turn to draw! ${esc(guesserFor().name)} will guess it, so no peeking, ${esc(guesserFor().name)}!` : "It's your turn to draw! Only you should look at the next screen."}</p>
         <button class="btn-go btn-big" data-act="dshow">Show me the word 🤫</button>
       </div></div>`;
     return;
@@ -1968,7 +2034,7 @@ function renderDraw() {
         <p class="chip">${view.word.cat.emoji} ${esc(view.word.cat.name)}</p>
         <p class="muted">Your secret word is</p>
         <div class="secret">${esc(view.word.w)}</div>
-        <p class="muted">No letters or numbers allowed in your drawing!</p>
+        <p class="muted">${view.mode === "pass" ? `Draw it so ${esc(guesserFor().name)} can guess it. ` : ""}No letters or numbers allowed in your drawing!</p>
         <div class="row" style="justify-content:center">
           <button data-act="dnewword" ${view.skips ? "" : "disabled"}>🔄 Different word (${view.skips} left)</button>
           <button class="btn-go btn-big" data-act="dgo">Start drawing ✏️</button>
@@ -2009,7 +2075,9 @@ function renderDraw() {
           </div>
         </div>
         <div class="row" style="justify-content:flex-end">
-          <button class="btn-go btn-big" data-act="dguessed">✋ Someone guessed it!</button>
+          ${view.mode === "pass"
+            ? `<button class="btn-go btn-big" data-act="dguessed">✅ I'm finished</button>`
+            : `<button class="btn-go btn-big" data-act="dguessed">✋ Someone guessed it!</button>`}
         </div>
       </div>`;
     pad.mount($("#pad"));
@@ -2033,6 +2101,40 @@ function renderDraw() {
     return;
   }
 
+  if (view.phase === "passguess") {
+    const g = guesserFor();
+    app.innerHTML = `${drawTop()}
+      <div class="stage"><div class="center-screen">
+        <p class="muted">${esc(d.name)} has finished drawing. Pass the tablet to…</p>
+        <div class="big-av">${esc(g.av)}</div>
+        <h1>${esc(g.name)}</h1>
+        <p>Watch the drawing appear and pick the right answer. Quicker guesses score more points!</p>
+        <button class="btn-go btn-big" data-act="dready">I'm ready to guess 👀</button>
+      </div></div>`;
+    return;
+  }
+
+  if (view.phase === "guess") {
+    const g = guesserFor();
+    if (!view.options) view.options = makeOptions();
+    app.innerHTML = `${drawTop()}
+      <div class="stage draw-stage">
+        <div class="row spread">
+          <span class="chip">${esc(g.av)} ${esc(g.name)} is guessing ${esc(d.name)}'s drawing</span>
+          <div class="timer small-timer"><div class="num" id="tnum">${GUESS_TIME}</div></div>
+        </div>
+        <div class="bar"><i id="tbar"></i></div>
+        <canvas class="pad replay" id="replay" aria-label="${esc(d.name)}'s drawing"></canvas>
+        <h3 style="text-align:center">What is it?</h3>
+        <div class="options">
+          ${view.options.map((w, i) => `<button class="answer c${i % 4}" data-act="dpick" data-i="${i}">${esc(w)}</button>`).join("")}
+        </div>
+      </div>`;
+    replayDrawing($("#replay"));
+    runTimer(GUESS_TIME, () => pickGuess(null), GUESS_TIME);
+    return;
+  }
+
   if (view.phase === "reveal") {
     const g = view.guesser ? P.find(p => p.id === view.guesser) : null;
     if (!view.saved) {
@@ -2045,6 +2147,7 @@ function renderDraw() {
     app.innerHTML = `${drawTop()}
       <div class="stage">
         <div class="center-screen" style="flex:0;padding-block:0">
+          ${view.mode === "pass" ? `<div class="big-mark">${g ? "🎉" : "😬"}</div><h2>${g ? "Right!" : "Not this time!"}</h2>` : ""}
           <p class="muted">It was…</p>
           <div class="secret">${view.word.cat.emoji} ${esc(view.word.w)}</div>
         </div>
@@ -2052,7 +2155,9 @@ function renderDraw() {
         <div class="row" style="justify-content:center">
           ${g
             ? `<span class="chip win-chip">${esc(g.av)} ${esc(g.name)} guessed it +${g.gained}</span><span class="chip win-chip">${esc(d.av)} ${esc(d.name)} drew it +${d.gained}</span>`
-            : `<span class="chip">Nobody guessed it this time</span>`}
+            : view.mode === "pass"
+              ? `<span class="chip lose-chip">${esc(guesserFor().av)} ${esc(guesserFor().name)} ${view.pick ? `picked “${esc(view.pick)}”` : "ran out of time"}</span>`
+              : `<span class="chip">Nobody guessed it this time</span>`}
         </div>
         <p class="muted" style="text-align:center">Saved to the drawing gallery 🖼️</p>
         <div class="row" style="justify-content:flex-end"><button class="btn-go btn-big" data-act="dscores">Scores ▶</button></div>
@@ -2092,17 +2197,29 @@ function renderDraw() {
 function finishDrawing() {
   stopTimer();
   view.img = pad.snapshot();
-  view.phase = "who";
+  view.phase = view.mode === "pass" ? "passguess" : "who";
   render();
+  window.scrollTo(0, 0);
 }
 
-function scoreDraw(guesserId) {
+function pickGuess(i) {
+  if (view.phase !== "guess") return;
+  stopTimer();
+  view.pick = i === null ? null : view.options[i];
+  const right = view.pick !== null && view.pick === view.word.w;
+  scoreDraw(right ? guesserFor().id : null, Math.max(0, view.tLeft) / GUESS_TIME);
+  view.phase = "reveal";
+  render();
+  window.scrollTo(0, 0);
+}
+
+function scoreDraw(guesserId, frac = view.tLeft / view.time) {
   const P = view.players, d = drawer();
   P.forEach(p => { p.gained = 0; });
   view.guesser = guesserId || null;
   if (guesserId) {
     const g = P.find(p => p.id === guesserId);
-    g.gained = 50 + Math.round(50 * view.tLeft / view.time);
+    g.gained = 50 + Math.round(50 * Math.min(1, Math.max(0, frac)));
     d.gained = 50;
     g.score += g.gained; d.score += d.gained;
   }
@@ -2340,6 +2457,9 @@ app.addEventListener("click", e => {
     case "drounds": view.rounds = +el.dataset.n; renderKeepScroll(); break;
     case "dtime": view.dtime = +el.dataset.t; renderKeepScroll(); break;
     case "dstart": startDraw(); break;
+    case "dmode": view.dmode = el.dataset.m; sound.tap(); renderKeepScroll(); break;
+    case "dready": view.phase = "guess"; view.tLeft = GUESS_TIME; render(); window.scrollTo(0, 0); break;
+    case "dpick": pickGuess(+el.dataset.i); break;
     case "dshow": view.phase = "word"; render(); break;
     case "dnewword": if (view.skips > 0) { view.skips--; view.word = nextWord(); sound.tap(); render(); } break;
     case "dgo": pad.tool = "pen"; pad.color = INK[0]; pad.size = SIZES[1]; view.phase = "drawing"; sound.go(); render(); window.scrollTo(0, 0); break;

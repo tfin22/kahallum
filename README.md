@@ -37,9 +37,12 @@ Getting several right in a row builds a 🔥 streak worth bonus points. The winn
 
 A pass-the-tablet drawing game. Pick who's playing, which categories to draw from (16 categories, over 500 things to draw), how many rounds, and how long each drawing gets (45, 60 or 90 seconds). Everyone draws once per round.
 
-1. The tablet is passed to the artist, who secretly sees their word (they can swap it up to twice).
-2. They draw it with pens, a fill bucket, a rubber, undo and clear. Everyone else watches and shouts out guesses. The category is shown as a hint.
-3. When someone gets it, the artist taps **Someone guessed it!** and picks who. The guesser scores 50 to 100 points (faster is more) and the artist gets 50.
+There are two ways to play:
+
+- **🗣️ Shout it out**: the artist draws while everyone else watches and shouts out guesses. When someone gets it, the artist taps **Someone guessed it!** and picks who.
+- **🔁 Pass and guess**: the artist draws in secret, then passes the tablet to the next player. They watch the drawing appear stroke by stroke and pick the answer from 6 choices. Then it's their turn to draw for the next person. Everyone draws once and guesses once per round.
+
+Each turn, the artist secretly sees their word (they can swap it up to twice), then draws it with pens, a fill bucket, a rubber, undo and clear. The category is shown as a hint. A right guess scores 50 to 100 points (faster is more) and the artist gets 50.
 
 Every drawing is saved to the **Gallery** on that device (the newest 60), with the word, who drew it and who guessed it. Pictures can be saved as image files from there.
 
