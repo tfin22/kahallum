@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#e9f0ff"/>
+  <g stroke="#1d1b3f" stroke-width="14" stroke-linejoin="round">
+    <!-- shadows -->
+    <g fill="#1d1b3f" stroke="none">
+      <rect x="86" y="86" width="164" height="164" rx="34"/>
+      <rect x="274" y="86" width="164" height="164" rx="34"/>
+      <rect x="86" y="274" width="164" height="164" rx="34"/>
+      <rect x="274" y="274" width="164" height="164" rx="34"/>
+    </g>
+    <rect x="74" y="74" width="164" height="164" rx="34" fill="#ff6b5e"/>
+    <rect x="262" y="74" width="164" height="164" rx="34" fill="#22c3a6"/>
+    <rect x="74" y="262" width="164" height="164" rx="34" fill="#ffc93c"/>
+    <rect x="262" y="262" width="164" height="164" rx="34" fill="#a98bff"/>
+  </g>
+  <g fill="#fff" stroke="#1d1b3f" stroke-width="7" stroke-linejoin="round">
+    <!-- star -->
+    <path transform="translate(100 100) scale(4.65)" d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4 6.1 20.5l1.2-6.5L2.5 9.4l6.6-.9z" stroke-width="1.6"/>
+    <!-- heart -->
+    <path transform="translate(288 100) scale(4.65)" d="M12 20.5S3 15 3 8.8A4.6 4.6 0 0 1 12 6.6a4.6 4.6 0 0 1 9 2.2c0 6.2-9 11.7-9 11.7z" stroke-width="1.6"/>
+    <!-- moon -->
+    <path transform="translate(100 288) scale(4.65)" d="M15.5 3a9 9 0 1 0 5.5 13.6A7.2 7.2 0 0 1 15.5 3z" stroke-width="1.6"/>
+    <!-- bolt -->
+    <path transform="translate(288 288) scale(4.65)" d="M13.5 2L4.5 13.5h6.2L9.5 22l10-12.2h-6.4z" stroke-width="1.6"/>
+  </g>
+</svg>
