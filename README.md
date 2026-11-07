@@ -1,6 +1,6 @@
 # Kahallum
 
-A family quiz game. Make your own quiz, then play it together in the same room.
+A family games app with two games: make-your-own quizzes, and Draw & Guess. Both are played together in the same room.
 
 Everything is in one file: `index.html`. Open it in any web browser. No install, no accounts.
 
@@ -33,7 +33,19 @@ Add everyone who's playing (Kahallum remembers them for next time), then pick a 
 
 Getting several right in a row builds a 🔥 streak worth bonus points. The winner gets a podium and confetti.
 
-## Sharing a game with another device
+## Draw & Guess
+
+A pass-the-tablet drawing game. Pick who's playing, which categories to draw from (16 categories, over 500 things to draw), how many rounds, and how long each drawing gets (45, 60 or 90 seconds). Everyone draws once per round.
+
+1. The tablet is passed to the artist, who secretly sees their word (they can swap it up to twice).
+2. They draw it with pens, a fill bucket, a rubber, undo and clear. Everyone else watches and shouts out guesses. The category is shown as a hint.
+3. When someone gets it, the artist taps **Someone guessed it!** and picks who. The guesser scores 50 to 100 points (faster is more) and the artist gets 50.
+
+Every drawing is saved to the **Gallery** on that device (the newest 60), with the word, who drew it and who guessed it. Pictures can be saved as image files from there.
+
+The words live in the `DRAW_CATS` list in `index.html`.
+
+## Sharing a quiz with another device
 
 Tap **Share** on a game to get a code that starts with `KAHALLUM:`. Copy it and text or email it to another phone. On that phone, open Kahallum, tap **Add a shared game**, and paste the code.
 
