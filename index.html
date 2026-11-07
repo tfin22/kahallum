@@ -293,6 +293,32 @@ label.lbl { font-size: .85rem; text-transform: uppercase; letter-spacing: 1px; c
 .gal-card .gw { font-family: var(--display); font-size: 1.2rem; font-weight: 400; overflow-wrap: anywhere; }
 .gal-card .gb { font-size: .85rem; color: var(--ink-soft); font-weight: 800; }
 
+/* ---------- word search ---------- */
+.ws-band { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; background: var(--grape); }
+.ws-band .muted { color: var(--ink); }
+.mode-pick.three { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 760px) { .mode-pick.three { grid-template-columns: 1fr; } }
+.pack-tile.picked { outline: 5px solid var(--ink); outline-offset: 3px; }
+.pack-tile:not(.picked) { opacity: .8; }
+.ws-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 18px; align-items: start; }
+@media (max-width: 760px) { .ws-layout { grid-template-columns: minmax(0, 1fr); } }
+.ws-frame {
+  margin: 0 auto; padding: 8px; background: var(--card); border: var(--line) solid var(--ink); border-radius: 18px; box-shadow: var(--pop);
+  width: min(100%, max(280px, calc(100vh - 220px)));
+  width: min(100%, max(280px, calc(100dvh - 220px)));
+}
+.ws-board { position: relative; width: 100%; aspect-ratio: 1; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.ws-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--n), 1fr); grid-template-rows: repeat(var(--n), 1fr); }
+.ws-cell { display: grid; place-items: center; font-weight: 900; line-height: 1; color: var(--ink); }
+.ws-cell.hint { background: var(--sun); border-radius: 50%; animation: thump .45s infinite alternate; }
+.ws-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ws-side { display: flex; flex-direction: column; gap: 12px; }
+.ws-words { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.ws-words li { font-weight: 900; font-size: 1.05rem; padding: 3px 9px; border-radius: 8px; border: 2px solid var(--ink); background: var(--card); }
+.ws-words li.found { text-decoration: line-through; background: var(--c); }
+.ws-done { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; background: var(--sun); }
+.ws-clock { font-variant-numeric: tabular-nums; }
+
 /* ---------- modal + toast ---------- */
 .veil { position: fixed; inset: 0; background: rgba(29, 27, 63, .55); display: grid; place-items: center; padding: 20px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px)); z-index: 50; }
 .veil .panel { width: min(560px, 100%); max-height: 90vh; overflow: auto; }
@@ -871,6 +897,23 @@ const DRAW_CATS = [
 ].map(c => ({ ...c, words: c.words.split(",").map(w => w.trim()).filter(Boolean) }));
 </script>
 <script>
+/* ==================================================================
+   Word search topics. Spaces and punctuation are ignored in the grid.
+   ================================================================== */
+const WS_CATS = [
+{ id: "pokemon", name: "Pokémon", emoji: "⚡", words: "Pikachu, Charmander, Squirtle, Bulbasaur, Eevee, Snorlax, Jigglypuff, Meowth, Psyduck, Gengar, Mewtwo, Mew, Onix, Magikarp, Gyarados, Charizard, Raichu, Pichu, Lucario, Greninja, Mimikyu, Ditto, Lapras, Dragonite, Arcanine, Vulpix, Togepi, Machop, Geodude, Abra, Articuno, Zapdos, Moltres, Piplup, Rowlet, Sobble, Grookey, Scorbunny, Cyndaquil, Totodile, Torchic, Mudkip, Rayquaza, Blastoise, Venusaur, Wailord, Snivy, Oshawott, Fuecoco, Quaxly, Sprigatito, Lugia, Garchomp, Riolu, Pidgey, Caterpie, Butterfree, Haunter, Slowpoke, Cubone" },
+{ id: "animals", name: "Animals", emoji: "🦁", words: "Cat, Dog, Lion, Tiger, Zebra, Giraffe, Elephant, Monkey, Rabbit, Horse, Sheep, Goat, Panda, Koala, Kangaroo, Camel, Hippo, Rhino, Bear, Wolf, Fox, Owl, Eagle, Parrot, Penguin, Frog, Snake, Tortoise, Hedgehog, Squirrel, Cheetah, Gorilla, Otter, Badger, Donkey, Mouse, Flamingo, Crocodile, Leopard, Llama" },
+{ id: "minecraft", name: "Minecraft", emoji: "⛏️", words: "Creeper, Zombie, Skeleton, Enderman, Pickaxe, Diamond, Emerald, Redstone, Obsidian, Nether, Torch, Furnace, Chest, Villager, Portal, Blaze, Ghast, Slime, Spider, Wither, Dragon, Beacon, Anvil, Bucket, Lava, Cobblestone, Steve, Alex, Piglin, Axolotl, Elytra, Trident, Shield, Sword, Minecart, Biome, Iron Golem, Crafting Table, Ender Pearl, Sheep, Bed, Wolf" },
+{ id: "space", name: "Space", emoji: "🚀", words: "Sun, Moon, Star, Planet, Rocket, Comet, Galaxy, Orbit, Mars, Venus, Earth, Jupiter, Saturn, Uranus, Neptune, Mercury, Pluto, Astronaut, Alien, Meteor, Asteroid, Nebula, Telescope, Satellite, Gravity, Crater, Eclipse, Spacesuit, UFO, Launch, Cosmos, Black Hole, Milky Way, Shooting Star, Lander, Rover" },
+{ id: "dinosaurs", name: "Dinosaurs", emoji: "🦖", words: "T. rex, Raptor, Fossil, Bones, Egg, Claw, Roar, Jurassic, Triceratops, Stegosaurus, Diplodocus, Velociraptor, Spinosaurus, Ankylosaurus, Brachiosaurus, Iguanodon, Pteranodon, Allosaurus, Extinct, Meteor, Volcano, Herbivore, Carnivore, Scales, Tail, Horn, Nest, Dig, Museum, Teeth, Swamp, Footprint, Cretaceous" },
+{ id: "food", name: "Food", emoji: "🍕", words: "Pizza, Burger, Pasta, Apple, Banana, Cheese, Bread, Cake, Cookie, Carrot, Grapes, Lemon, Mango, Orange, Peach, Chips, Toast, Soup, Salad, Taco, Sushi, Noodles, Doughnut, Pancake, Waffle, Popcorn, Chocolate, Milkshake, Sandwich, Broccoli, Sausage, Yoghurt, Ice Cream, Cupcake, Jelly, Pear, Plum" },
+{ id: "sports", name: "Sports", emoji: "⚽", words: "Football, Padel, Tennis, Rugby, Cricket, Golf, Hockey, Swimming, Cycling, Running, Boxing, Karate, Judo, Skiing, Surfing, Rowing, Diving, Netball, Basketball, Baseball, Snooker, Darts, Archery, Racket, Goal, Medal, Trophy, Referee, Whistle, Team, Score, Net, Serve, Volley, Smash, Lob" },
+{ id: "sea", name: "Under the Sea", emoji: "🌊", words: "Fish, Shark, Whale, Dolphin, Octopus, Squid, Crab, Lobster, Jellyfish, Starfish, Seahorse, Turtle, Coral, Seaweed, Shell, Pearl, Clam, Eel, Stingray, Seal, Walrus, Orca, Pufferfish, Clownfish, Anchor, Submarine, Diver, Wave, Reef, Tide, Oyster, Plankton, Shipwreck, Treasure" },
+{ id: "zelda", name: "Zelda", emoji: "🗡️", words: "Link, Zelda, Ganon, Hyrule, Triforce, Rupee, Epona, Navi, Korok, Goron, Zora, Rito, Gerudo, Sheikah, Bokoblin, Moblin, Lynel, Guardian, Shrine, Master Sword, Bow, Arrow, Shield, Ocarina, Boomerang, Hookshot, Paraglider, Kakariko, Impa, Mipha, Daruk, Revali, Urbosa, Ultrahand, Fairy, Heart, Octorok, Deku Tree" },
+{ id: "fortnite", name: "Fortnite", emoji: "🪂", words: "Battle Bus, Storm, Llama, Pickaxe, Glider, V-Bucks, Victory, Royale, Squad, Duo, Solo, Loot, Chest, Shield, Bandages, Med Kit, Emote, Skin, Build, Ramp, Wall, Island, Peely, Jonesy, Fishstick, Meowscles, Supply Drop, Creative, Festival, Zero Build, Launch Pad, Dance, Season, Battle Pass, Rarity, Legendary, Epic" }
+].map(c => ({ ...c, words: c.words.split(",").map(w => w.trim()).filter(Boolean) }));
+</script>
+<script>
 "use strict";
 /* ==================================================================
    Kahallum: make quiz games and play them together in one room.
@@ -1094,7 +1137,7 @@ function topbar(extra = "") {
 }
 
 function render() {
-  const fn = { home: renderHome, edit: renderEdit, setup: renderSetup, play: renderPlay, packs: renderPacks, pack: renderPack, dsetup: renderDrawSetup, draw: renderDraw, gallery: renderGallery }[view.name] || renderHome;
+  const fn = { home: renderHome, edit: renderEdit, setup: renderSetup, play: renderPlay, packs: renderPacks, pack: renderPack, dsetup: renderDrawSetup, draw: renderDraw, gallery: renderGallery, wsetup: renderWsSetup, ws: renderWordSearch }[view.name] || renderHome;
   fn();
 }
 
@@ -1118,10 +1161,11 @@ function renderHome() {
     <section class="hero">
       <div class="stack">
         <h1>Make a quiz.<br>Draw a doodle.<br>Beat your family.</h1>
-        <p class="tag">Write your own quizzes or draw secret pictures, then play together with everyone in the room.</p>
+        <p class="tag">Write your own quizzes or draw secret pictures and play together with everyone in the room. Or hunt for hidden words on your own.</p>
         <div class="row">
           <button class="btn-go btn-big" data-act="new">＋ Make a quiz</button>
           <button class="btn-good btn-big" data-act="dsetup">✏️ Draw &amp; Guess</button>
+          <button class="btn-big" data-act="wsetup">🔍 Word Search</button>
         </div>
       </div>
       <div class="hero-tiles" aria-hidden="true">
@@ -1137,6 +1181,13 @@ function renderHome() {
         <button class="btn-go" data-act="dsetup">Play ▶</button>
         <button data-act="gallery">🖼️ Gallery (${gallery.items.length})</button>
       </div>
+    </section>
+    <section class="panel ws-band">
+      <div class="stack" style="gap:4px;flex:1 1 260px">
+        <h2>🔍 Word Search</h2>
+        <p class="muted">A puzzle just for you. ${WS_CATS.length} topics including Pokémon, three sizes, and a brand new grid every time.</p>
+      </div>
+      <div class="row"><button class="btn-go" data-act="wsetup">Play ▶</button></div>
     </section>
     <section class="stack">
       <h2>My quizzes</h2>
@@ -1708,7 +1759,7 @@ function confetti() {
   (function frame(now) {
     ctx.clearRect(0, 0, W, H);
     bits.forEach(b => { b.x += b.vx; b.y += b.vy; b.a += b.va; ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.a); ctx.fillStyle = b.c; ctx.fillRect(-b.r / 2, -b.r / 4, b.r, b.r / 2); ctx.restore(); });
-    if (now < end && (view.name === "play" || view.name === "draw")) requestAnimationFrame(frame); else { ctx.clearRect(0, 0, W, H); c.hidden = true; }
+    if (now < end && ["play", "draw", "ws"].includes(view.name)) requestAnimationFrame(frame); else { ctx.clearRect(0, 0, W, H); c.hidden = true; }
   })(performance.now());
 }
 
@@ -2276,6 +2327,289 @@ function openDrawing(id) {
 }
 
 /* ==================================================================
+   WORD SEARCH: a one-player puzzle. A fresh grid every time.
+   ================================================================== */
+const ALL_DIRS = [[1, 0], [0, 1], [1, 1], [-1, 0], [0, -1], [1, -1], [-1, 1], [-1, -1]];
+const WS_SIZES = {
+  small: { label: "Small", n: 8, count: 6, dirs: ALL_DIRS.slice(0, 3), rule: "Words go across, down and diagonally." },
+  medium: { label: "Medium", n: 11, count: 9, dirs: ALL_DIRS.slice(0, 6), rule: "Some words go backwards and upwards too." },
+  large: { label: "Large", n: 14, count: 12, dirs: ALL_DIRS, rule: "Words hide in every direction, even backwards diagonally!" }
+};
+const WS_COLORS = ["#ff6b5e", "#22c3a6", "#ffc93c", "#a98bff", "#3a86ff", "#ff9f1c", "#2bb24c", "#ff7eb6"];
+
+const wsBest = {
+  key: "kahallum.wsbest",
+  all() { try { return JSON.parse(localStorage.getItem(this.key)) || {}; } catch (e) { return {}; } },
+  get(k) { return this.all()[k]; },
+  set(k, secs) { const a = this.all(); a[k] = secs; try { localStorage.setItem(this.key, JSON.stringify(a)); } catch (e) {} }
+};
+const wsLetters = w => w.toUpperCase().replace(/[^A-Z]/g, "");
+const mmss = s => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+const rand = n => Math.floor(Math.random() * n);
+
+function placeWord(grid, L, dirs) {
+  const n = grid.length;
+  for (let t = 0; t < 200; t++) {
+    const [dx, dy] = dirs[rand(dirs.length)];
+    const len = L.length - 1;
+    const xs = dx === 1 ? n - len : dx === -1 ? n - len : n, xo = dx === -1 ? len : 0;
+    const ys = dy === 1 ? n - len : dy === -1 ? n - len : n, yo = dy === -1 ? len : 0;
+    if (xs <= 0 || ys <= 0) continue;
+    const x = xo + rand(xs), y = yo + rand(ys);
+    let ok = true;
+    for (let i = 0; i <= len && ok; i++) { const c = grid[y + dy * i][x + dx * i]; if (c && c !== L[i]) ok = false; }
+    if (!ok) continue;
+    for (let i = 0; i <= len; i++) grid[y + dy * i][x + dx * i] = L[i];
+    return { x, y, dx, dy };
+  }
+  return null;
+}
+
+function makeWordSearch(cat, sizeKey) {
+  const cfg = WS_SIZES[sizeKey], n = cfg.n;
+  const pool = shuffle(cat.words.filter(w => { const l = wsLetters(w).length; return l >= 3 && l <= n; }));
+  let best = null;
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const grid = Array.from({ length: n }, () => Array(n).fill(""));
+    // Try a few more words than needed, longest first, so they fit together.
+    const candidates = shuffle(pool).slice(0, cfg.count + 6).sort((a, b) => wsLetters(b).length - wsLetters(a).length);
+    const placed = [];
+    for (const w of candidates) {
+      if (placed.length >= cfg.count) break;
+      const L = wsLetters(w);
+      if (placed.some(p => p.letters === L)) continue;
+      const spot = placeWord(grid, L, cfg.dirs);
+      if (spot) placed.push({ word: w, letters: L, found: false, ...spot });
+    }
+    if (!best || placed.length > best.placed.length) best = { grid, placed };
+    if (placed.length >= cfg.count) break;
+  }
+  const A = "ABCDEFGHIJKLMNOPRSTUWY";
+  best.grid.forEach(row => row.forEach((c, i) => { if (!c) row[i] = A[rand(A.length)]; }));
+  best.placed.sort((a, b) => a.word.localeCompare(b.word));
+  return { n, grid: best.grid, words: best.placed };
+}
+
+/* ---------- choose a puzzle ---------- */
+function renderWsSetup() {
+  view.wcat = view.wcat || "pokemon";
+  view.wsize = view.wsize || "small";
+  const tiles = WS_CATS.map((c, i) => `
+    <button class="pack-tile ${COLORS[i % 4]} ${view.wcat === c.id ? "picked" : ""}" data-act="wscat" data-id="${c.id}" aria-pressed="${view.wcat === c.id}">
+      <span class="em">${c.emoji}</span><span class="nm">${esc(c.name)}</span>
+      <span class="ct">${(b => b ? "Best " + mmss(b) : "&nbsp;")(wsBest.get(c.id + "-" + view.wsize))}</span>
+    </button>`).join("");
+  const sizes = Object.entries(WS_SIZES).map(([k, s]) => `
+    <button class="mode ${view.wsize === k ? "on" : ""}" data-act="wssize" data-k="${k}">
+      <b>${s.label}</b>
+      <span>${s.n} × ${s.n} letters, ${s.count} words. ${s.rule}</span>
+    </button>`).join("");
+  app.innerHTML = `
+    ${topbar()}
+    <div class="row spread"><h2>🔍 Word Search</h2><button class="btn-small" data-act="home">✕ Back</button></div>
+    <p class="muted">Find all the hidden words as fast as you can. Every puzzle is new!</p>
+    <section class="stack"><h3>Pick a topic</h3><div class="packs">${tiles}</div></section>
+    <section class="stack"><h3>Pick a size</h3><div class="mode-pick three">${sizes}</div></section>
+    <div class="row" style="justify-content:flex-end"><button class="btn-go btn-big" data-act="wsstart">Start puzzle ▶</button></div>`;
+}
+
+function startWordSearch() {
+  const cat = WS_CATS.find(c => c.id === view.wcat) || WS_CATS[0];
+  const size = view.wsize || "small";
+  const puzzle = makeWordSearch(cat, size);
+  go("ws", { cat, size, puzzle, start: Date.now(), hints: 0, done: false, pending: null, hint: null, wcat: cat.id, wsize: size });
+  timerHandle = setInterval(() => {
+    const t = $("#wstime");
+    if (t && !view.done) t.textContent = mmss((Date.now() - view.start) / 1000);
+  }, 500);
+}
+
+/* ---------- play ---------- */
+function wsLine(a, b, color, extra = "") {
+  return `<line x1="${a.x + .5}" y1="${a.y + .5}" x2="${b.x + .5}" y2="${b.y + .5}" stroke="${color}" stroke-width=".78" stroke-linecap="round" ${extra}/>`;
+}
+
+function renderWordSearch() {
+  const { puzzle: P, cat } = view;
+  const found = P.words.filter(w => w.found).length;
+  const cells = P.grid.map((row, y) => row.map((c, x) => {
+    const hint = view.hint && view.hint.x === x && view.hint.y === y;
+    return `<div class="ws-cell${hint ? " hint" : ""}">${c}</div>`;
+  }).join("")).join("");
+  const lines = P.words.filter(w => w.found).map(w => wsLine(w.a, w.b, w.color, 'stroke-opacity=".55"')).join("");
+  const list = P.words.map(w => `<li class="${w.found ? "found" : ""}" style="--c:${w.color || "transparent"}">${esc(w.word)}</li>`).join("");
+  const key = cat.id + "-" + view.size;
+  const best = wsBest.get(key);
+  app.innerHTML = `
+    ${topbar(`<button class="btn-small" data-act="wsetup">✕ End</button>`)}
+    <div class="row spread">
+      <h2>${cat.emoji} ${esc(cat.name)} <span class="chip">${WS_SIZES[view.size].label}</span></h2>
+      <div class="row" style="gap:8px">
+        <span class="chip ws-clock">⏱️ <span id="wstime">${mmss(((view.doneAt || Date.now()) - view.start) / 1000)}</span></span>
+        <span class="chip">${found} of ${P.words.length} found</span>
+      </div>
+    </div>
+    ${view.done ? `
+      <div class="panel ws-done">
+        <div class="big-mark">🎉</div>
+        <div class="stack" style="gap:4px;flex:1 1 220px">
+          <h2>You found them all!</h2>
+          <p>Time: <b>${mmss(view.elapsed)}</b>${view.hints ? ` with ${view.hints} hint${view.hints === 1 ? "" : "s"}` : ""}. ${view.newBest ? "🏆 New best time!" : best ? `Best: ${mmss(best)}` : ""}</p>
+        </div>
+        <div class="row">
+          <button class="btn-go" data-act="wsagain">New puzzle 🔄</button>
+          <button data-act="wsetup">Change topic</button>
+        </div>
+      </div>` : ""}
+    <div class="ws-layout">
+      <div class="ws-frame">
+        <div class="ws-board" id="wsboard" style="--n:${P.n}">
+          <div class="ws-grid">${cells}</div>
+          <svg class="ws-lines" viewBox="0 0 ${P.n} ${P.n}" aria-hidden="true">${lines}<g id="wssel"></g></svg>
+        </div>
+      </div>
+      <div class="panel ws-side">
+        <h3>Find these words</h3>
+        <ul class="ws-words">${list}</ul>
+        ${view.done ? "" : `<div class="row">
+          <button class="btn-small" data-act="wshint">💡 Hint</button>
+          <button class="btn-small" data-act="wsagain">🔄 New puzzle</button>
+        </div>
+        <p class="muted" style="font-size:.85rem">Drag across a word, or tap its first and last letters.</p>`}
+      </div>
+    </div>`;
+  wsSize();
+  wsBind($("#wsboard"));
+  wsDrawSel();
+}
+
+function wsSize() {
+  const b = $("#wsboard");
+  if (b) b.style.fontSize = (b.getBoundingClientRect().width / view.puzzle.n * 0.58) + "px";
+}
+window.addEventListener("resize", () => { if (view.name === "ws") wsSize(); });
+
+function wsCell(e, clamp) {
+  const b = $("#wsboard"), r = b.getBoundingClientRect(), n = view.puzzle.n;
+  let x = Math.floor((e.clientX - r.left) / r.width * n), y = Math.floor((e.clientY - r.top) / r.height * n);
+  if (!clamp && (x < 0 || y < 0 || x >= n || y >= n)) return null;
+  return { x: Math.max(0, Math.min(n - 1, x)), y: Math.max(0, Math.min(n - 1, y)) };
+}
+
+// Snap a drag to the nearest of the 8 straight directions.
+function wsSnap(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, n = view.puzzle.n;
+  if (!dx && !dy) return { ...a };
+  const oct = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+  const ux = Math.round(Math.cos(oct * Math.PI / 4)), uy = Math.round(Math.sin(oct * Math.PI / 4));
+  let len = Math.max(Math.abs(dx), Math.abs(dy));
+  while (len > 0) {
+    const x = a.x + ux * len, y = a.y + uy * len;
+    if (x >= 0 && y >= 0 && x < n && y < n) break;
+    len--;
+  }
+  return { x: a.x + ux * len, y: a.y + uy * len };
+}
+const sameCell = (a, b) => a && b && a.x === b.x && a.y === b.y;
+const straight = (a, b) => { const dx = b.x - a.x, dy = b.y - a.y; return dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy); };
+
+function wsDrawSel(bad) {
+  const g = $("#wssel");
+  if (!g) return;
+  const d = view.drag;
+  if (d) g.innerHTML = wsLine(d.start, d.end, bad ? "var(--bad)" : "var(--ink)", 'stroke-opacity=".28"');
+  else if (view.pending) g.innerHTML = wsLine(view.pending, view.pending, "var(--ink)", 'stroke-opacity=".28"');
+  else g.innerHTML = "";
+}
+
+function wsBind(board) {
+  board.addEventListener("pointerdown", e => {
+    if (view.done || view.drag) return;
+    const c = wsCell(e, false);
+    if (!c) return;
+    e.preventDefault();
+    try { board.setPointerCapture(e.pointerId); } catch (err) {}
+    view.drag = { id: e.pointerId, start: c, end: c, moved: false };
+    wsDrawSel();
+  });
+  board.addEventListener("pointermove", e => {
+    const d = view.drag;
+    if (!d || e.pointerId !== d.id) return;
+    e.preventDefault();
+    const end = wsSnap(d.start, wsCell(e, true));
+    if (!sameCell(end, d.end)) { d.end = end; if (!sameCell(end, d.start)) d.moved = true; wsDrawSel(); }
+  });
+  const up = e => {
+    const d = view.drag;
+    if (!d || e.pointerId !== d.id) return;
+    view.drag = null;
+    if (d.moved && !sameCell(d.start, d.end)) { view.pending = null; wsCheck(d.start, d.end); return; }
+    // A tap: first tap marks the start, second tap the end.
+    const c = d.start;
+    if (view.pending && !sameCell(view.pending, c) && straight(view.pending, c)) {
+      const a = view.pending; view.pending = null; wsCheck(a, c); return;
+    }
+    view.pending = sameCell(view.pending, c) ? null : c;
+    sound.tap();
+    wsDrawSel();
+  };
+  board.addEventListener("pointerup", up);
+  board.addEventListener("pointercancel", e => { if (view.drag && e.pointerId === view.drag.id) { view.drag = null; wsDrawSel(); } });
+}
+
+function wsCheck(a, b) {
+  const P = view.puzzle;
+  const dx = Math.sign(b.x - a.x), dy = Math.sign(b.y - a.y);
+  const len = Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+  let s = "";
+  for (let i = 0; i <= len; i++) s += P.grid[a.y + dy * i][a.x + dx * i];
+  const r = s.split("").reverse().join("");
+  const w = P.words.find(w => !w.found && (w.letters === s || w.letters === r));
+  if (!w) {
+    sound.beep(220, .12, "triangle", .05);
+    view.drag = { start: a, end: b };
+    wsDrawSel(true);
+    view.drag = null;
+    setTimeout(() => { if (view.name === "ws" && !view.drag) wsDrawSel(); }, 350);
+    return;
+  }
+  w.found = true; w.a = a; w.b = b;
+  w.color = WS_COLORS[P.words.filter(x => x.found).length % WS_COLORS.length];
+  if (view.hint && view.hint.word === w) view.hint = null;
+  if (P.words.every(x => x.found)) {
+    stopTimer();
+    view.done = true; view.doneAt = Date.now();
+    view.elapsed = Math.round((view.doneAt - view.start) / 1000);
+    const key = view.cat.id + "-" + view.size, prev = wsBest.get(key);
+    view.newBest = !prev || view.elapsed < prev;
+    if (view.newBest) wsBest.set(key, view.elapsed);
+    render();
+    sound.fanfare();
+    confetti();
+    return;
+  }
+  sound.yay();
+  render();
+}
+
+function wsHint() {
+  const left = view.puzzle.words.filter(w => !w.found);
+  if (!left.length) return;
+  const w = left[rand(left.length)];
+  view.hints++;
+  view.hint = { x: w.x, y: w.y, word: w };
+  render();
+  toast(`Look for “${w.word}”. It starts at the flashing letter.`);
+  const h = view.hint;
+  setTimeout(() => {
+    if (view.name !== "ws" || view.hint !== h) return;
+    view.hint = null;
+    if (view.drag) { const c = document.querySelector(".ws-cell.hint"); if (c) c.classList.remove("hint"); }
+    else render();
+  }, 3500);
+}
+
+/* ==================================================================
    Sharing: a game becomes a short code you can text or copy to
    another phone, tablet or laptop.
    ================================================================== */
@@ -2480,6 +2814,12 @@ app.addEventListener("click", e => {
       render(); window.scrollTo(0, 0); break;
     case "dagain": startDraw(view.setup); break;
     case "gallery": go("gallery"); break;
+    case "wsetup": go("wsetup", { wcat: view.wcat || (view.cat && view.cat.id), wsize: view.wsize || view.size }); break;
+    case "wscat": view.wcat = el.dataset.id; sound.tap(); renderKeepScroll(); break;
+    case "wssize": view.wsize = el.dataset.k; sound.tap(); renderKeepScroll(); break;
+    case "wsstart": startWordSearch(); break;
+    case "wsagain": view.wcat = view.cat.id; view.wsize = view.size; startWordSearch(); break;
+    case "wshint": wsHint(); break;
     case "gopen": openDrawing(el.dataset.id); break;
 
     /* setup */

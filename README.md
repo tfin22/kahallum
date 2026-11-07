@@ -1,6 +1,6 @@
 # Kahallum
 
-A family games app with two games: make-your-own quizzes, and Draw & Guess. Both are played together in the same room.
+A family games app with three games: make-your-own quizzes and Draw & Guess, played together in the same room, plus Word Search for one player.
 
 Everything is in one file: `index.html`. Open it in any web browser. No install, no accounts.
 
@@ -47,6 +47,20 @@ Each turn, the artist secretly sees their word (they can swap it up to twice), t
 Every drawing is saved to the **Gallery** on that device (the newest 60), with the word, who drew it and who guessed it. Pictures can be saved as image files from there.
 
 The words live in the `DRAW_CATS` list in `index.html`.
+
+## Word Search
+
+A one-player puzzle. Pick a topic (Pokémon, Animals, Minecraft, Space, Dinosaurs, Food, Sports, Under the Sea, Zelda or Fortnite) and a size:
+
+| Size | Grid | Words | Directions |
+|---|---|---|---|
+| Small | 8 × 8 | 6 | across, down, diagonally |
+| Medium | 11 × 11 | 9 | adds backwards and upwards |
+| Large | 14 × 14 | 12 | all 8 directions |
+
+Every puzzle is made fresh from the topic's word list, so there's always a new one. Drag across a word, or tap its first and last letters. A timer runs, the best time for each topic and size is saved, and **Hint** flashes the first letter of a word you haven't found.
+
+The topics and words live in the `WS_CATS` list in `index.html`.
 
 ## Sharing a quiz with another device
 
