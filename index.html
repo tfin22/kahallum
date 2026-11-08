@@ -302,7 +302,8 @@ label.lbl { font-size: .85rem; text-transform: uppercase; letter-spacing: 1px; c
 .options .answer { min-height: 64px; font-size: clamp(1.1rem, 3.2vw, 1.5rem); justify-content: center; text-align: center; padding: 10px; }
 .big-mark { font-size: clamp(3.5rem, 14vw, 6rem); line-height: 1; }
 .gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
-.gal-card { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 8px; font-family: var(--body); }
+.gal-card { position: relative; display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 8px; font-family: var(--body); }
+.replay-badge { position: absolute; top: 14px; left: 14px; z-index: 1; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--teal); color: var(--ink); border: 2px solid var(--ink); font-size: .95rem; box-shadow: 2px 2px 0 var(--ink); }
 .gal-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border: 2px solid var(--ink); border-radius: 10px; background: #fff; }
 .gal-card .gw { font-family: var(--display); font-size: 1.2rem; font-weight: 400; overflow-wrap: anywhere; }
 .gal-card .gb { font-size: .85rem; color: var(--ink-soft); font-weight: 800; }
@@ -1796,16 +1797,18 @@ const SIZES = [4, 10, 22];
 const CW = 800, CH = 600;
 
 /* ---------- saved drawings ---------- */
+// Drawings live in the browser's database (IndexedDB), which has far more
+// room than localStorage. Older galleries saved in localStorage are moved over.
 const gallery = {
   key: "kahallum.gallery",
+  max: 100,
   items: [],
-  load() {
-    try { const raw = localStorage.getItem(this.key); this.items = raw ? JSON.parse(raw) : []; }
-    catch (e) { this.items = []; }
-    if (!Array.isArray(this.items)) this.items = [];
+  db: null,
+  readLegacy() {
+    try { const a = JSON.parse(localStorage.getItem(this.key) || "[]"); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
   },
-  save() {
-    // Newest first; if the browser is full, let go of the oldest pictures.
+  saveLegacy() {
     for (;;) {
       try { localStorage.setItem(this.key, JSON.stringify(this.items)); return true; }
       catch (e) {
@@ -1815,8 +1818,52 @@ const gallery = {
       }
     }
   },
-  add(item) { this.items.unshift(item); if (this.items.length > 60) this.items.length = 60; this.save(); },
-  remove(id) { this.items = this.items.filter(i => i.id !== id); this.save(); }
+  openDb() {
+    return new Promise(res => {
+      try {
+        if (!window.indexedDB) return res(null);
+        const rq = indexedDB.open("kahallum", 1);
+        rq.onupgradeneeded = () => rq.result.createObjectStore("drawings", { keyPath: "id" });
+        rq.onsuccess = () => res(rq.result);
+        rq.onerror = () => res(null);
+        rq.onblocked = () => res(null);
+      } catch (e) { res(null); }
+    });
+  },
+  tx(mode, fn) {
+    return new Promise((res, rej) => {
+      const t = this.db.transaction("drawings", mode);
+      const r = fn(t.objectStore("drawings"));
+      t.oncomplete = () => res(r && "result" in r ? r.result : undefined);
+      t.onerror = () => rej(t.error);
+      t.onabort = () => rej(t.error);
+    });
+  },
+  load() {
+    this.items = this.readLegacy();
+    return this.openDb().then(db => {
+      if (!db) return;
+      this.db = db;
+      return this.tx("readonly", st => st.getAll()).then(rows => {
+        const have = new Set(rows.map(r => r.id));
+        const move = this.items.filter(i => !have.has(i.id));
+        this.items = rows.concat(move).sort((x, y) => (y.date || 0) - (x.date || 0)).slice(0, this.max);
+        const moved = move.length ? this.tx("readwrite", st => { move.forEach(i => st.put(i)); }) : Promise.resolve();
+        return moved.then(() => { try { localStorage.removeItem(this.key); } catch (e) {} });
+      });
+    }).catch(() => { this.db = null; });
+  },
+  add(item) {
+    this.items.unshift(item);
+    const extra = this.items.splice(this.max);
+    if (this.db) this.tx("readwrite", st => { st.put(item); extra.forEach(x => st.delete(x.id)); }).catch(() => {});
+    else this.saveLegacy();
+  },
+  remove(id) {
+    this.items = this.items.filter(i => i.id !== id);
+    if (this.db) this.tx("readwrite", st => { st.delete(id); }).catch(() => {});
+    else this.saveLegacy();
+  }
 };
 
 function dataUrlToBlob(url) {
@@ -2046,11 +2093,10 @@ function makeOptions() {
 }
 
 // Draw the picture again, stroke by stroke, for the person guessing.
-function replayDrawing(cv) {
+function replayDrawing(cv, ops = view.strokes || [], opts = {}) {
   cv.width = CW; cv.height = CH;
   const c = cv.getContext("2d", { willReadFrequently: true });
   c.fillStyle = "#ffffff"; c.fillRect(0, 0, CW, CH);
-  const ops = view.strokes || [];
   let first = 0;
   for (let i = ops.length - 1; i >= 0; i--) if (ops[i].t === "clear") { first = i + 1; break; }
   const steps = [];
@@ -2065,17 +2111,25 @@ function replayDrawing(cv) {
     if (k === 0) { c.beginPath(); c.arc(op.p[0], op.p[1], op.s / 2, 0, Math.PI * 2); c.fill(); }
     else { c.beginPath(); c.moveTo(op.p[k - 2], op.p[k - 1]); c.lineTo(op.p[k], op.p[k + 1]); c.stroke(); }
   };
-  const ms = Math.min(8000, Math.max(2500, steps.length * 12));
+  const ms = opts.slow ? Math.min(15000, Math.max(3000, steps.length * 20)) : Math.min(8000, Math.max(2500, steps.length * 12));
+  const done = () => { if (opts.onDone) opts.onDone(); };
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduce) { steps.forEach(step); return; }
+  if (reduce || !steps.length) { steps.forEach(step); done(); return; }
   const start = performance.now();
   let i = 0;
   (function frame(now) {
     if (!cv.isConnected) return;
     const target = Math.min(steps.length, Math.ceil(steps.length * (now - start) / ms));
     while (i < target) step(steps[i++]);
-    if (i < steps.length) requestAnimationFrame(frame);
+    if (i < steps.length) requestAnimationFrame(frame); else done();
   })(start);
+}
+
+// Keep only what's still on the page (everything after the last "Clear").
+function strokesToKeep(ops) {
+  let first = 0;
+  for (let i = ops.length - 1; i >= 0; i--) if (ops[i].t === "clear") { first = i + 1; break; }
+  return JSON.parse(JSON.stringify(ops.slice(first)));
 }
 
 /* ---------- play ---------- */
@@ -2213,7 +2267,7 @@ function renderDraw() {
     const g = view.guesser ? P.find(p => p.id === view.guesser) : null;
     if (!view.saved) {
       view.saved = true;
-      const item = { id: uid(), word: view.word.w, cat: view.word.cat.emoji, artist: d.name, av: d.av, guessedBy: g ? g.name : "", date: Date.now(), img: view.img };
+      const item = { id: uid(), word: view.word.w, cat: view.word.cat.emoji, artist: d.name, av: d.av, guessedBy: g ? g.name : "", date: Date.now(), img: view.img, strokes: strokesToKeep(view.strokes || []) };
       view.drawings.push(item);
       gallery.add(item);
       g ? sound.yay() : sound.nope();
@@ -2311,6 +2365,7 @@ function updateTools() {
 function galleryCard(it) {
   const when = new Date(it.date).toLocaleDateString(undefined, { day: "numeric", month: "short" });
   return `<button class="gal-card" data-act="gopen" data-id="${esc(it.id)}">
+    ${it.strokes && it.strokes.length ? `<span class="replay-badge" title="Can be watched being drawn">▶</span>` : ""}
     <img src="${it.img}" alt="${esc(it.artist)}'s drawing of ${esc(it.word)}" loading="lazy">
     <span class="gw">${esc(it.cat || "")} ${esc(it.word)}</span>
     <span class="gb">by ${esc(it.av || "")} ${esc(it.artist)} · ${esc(when)}</span>
@@ -2322,7 +2377,7 @@ function renderGallery() {
   app.innerHTML = `
     ${topbar()}
     <div class="row spread"><h2>🖼️ Drawing gallery</h2><button class="btn-small" data-act="home">✕ Back</button></div>
-    <p class="muted">Every Draw &amp; Guess picture is kept here on this device (the newest 60). Tap one to look closer or save it.</p>
+    <p class="muted">Every Draw &amp; Guess picture is kept here on this device (the newest 100). Tap one to look closer or save it. Pictures with a ▶ can be watched being drawn.</p>
     ${items.length ? `<div class="gal">${items.map(galleryCard).join("")}</div>`
       : `<div class="panel stack" style="align-items:flex-start"><h3>No drawings yet</h3><p>Play a game of Draw &amp; Guess and every picture will show up here.</p><button class="btn-go" data-act="dsetup">✏️ Play Draw &amp; Guess</button></div>`}`;
 }
@@ -2330,8 +2385,11 @@ function renderGallery() {
 function openDrawing(id) {
   const it = gallery.items.find(i => i.id === id) || (view.drawings || []).find(i => i.id === id);
   if (!it) return;
+  const canReplay = !!(it.strokes && it.strokes.length);
   modal(`
-    <img class="drawing" src="${it.img}" alt="${esc(it.artist)}'s drawing of ${esc(it.word)}">
+    <img class="drawing" id="g-img" src="${it.img}" alt="${esc(it.artist)}'s drawing of ${esc(it.word)}">
+    ${canReplay ? `<canvas class="drawing" id="g-cv" hidden aria-label="${esc(it.artist)}'s drawing being drawn"></canvas>` : ""}
+    ${canReplay ? `<button class="btn-good" id="g-play" style="align-self:center">▶ Watch it being drawn</button>` : ""}
     <h2>${esc(it.cat || "")} ${esc(it.word)}</h2>
     <p>Drawn by ${esc(it.av || "")} ${esc(it.artist)}${it.guessedBy ? `, guessed by ${esc(it.guessedBy)}` : ""}.</p>
     <div class="row" style="justify-content:flex-end">
@@ -2345,6 +2403,14 @@ function openDrawing(id) {
       <button class="btn-small btn-hot" id="g-yes">Delete</button>
     </div>`, (v, close) => {
     $("#g-save", v).onclick = () => downloadDrawing(it);
+    const play = $("#g-play", v);
+    if (play) play.onclick = () => {
+      $("#g-img", v).hidden = true;
+      const cv = $("#g-cv", v);
+      cv.hidden = false;
+      play.disabled = true; play.textContent = "✏️ Drawing…";
+      replayDrawing(cv, it.strokes, { slow: true, onDone: () => { play.disabled = false; play.textContent = "↻ Watch again"; } });
+    };
     $("#g-del", v).onclick = () => { $("#g-confirm", v).hidden = false; };
     $("#g-no", v).onclick = () => { $("#g-confirm", v).hidden = true; };
     $("#g-yes", v).onclick = () => { gallery.remove(it.id); close(); toast("Drawing deleted"); if (view.name === "gallery") render(); };
@@ -2927,7 +2993,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 /* ---------- boot ---------- */
 sound.init();
 store.loadLocal();
-gallery.load();
+gallery.load().then(() => { if (view.name === "home" || view.name === "gallery") renderKeepScroll(); });
 render();
 store.connect();
 </script>
