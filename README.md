@@ -44,7 +44,7 @@ There are two ways to play:
 
 Each turn, the artist secretly sees their word (they can swap it up to twice), then draws it with pens, a fill bucket, a rubber, undo and clear. The category is shown as a hint. A right guess scores 50 to 100 points (faster is more) and the artist gets 50.
 
-Every drawing is saved to the **Gallery** on that device (the newest 60), with the word, who drew it and who guessed it. Pictures can be saved as image files from there.
+Every drawing is saved to the **Gallery** on that device (the newest 100), with the word, who drew it and who guessed it. Tap **▶ Watch it being drawn** to see a picture redrawn line by line. Pictures can also be saved as image files from there.
 
 The words live in the `DRAW_CATS` list in `index.html`.
 
