@@ -278,14 +278,17 @@ label.lbl { font-size: .85rem; text-transform: uppercase; letter-spacing: 1px; c
 .small-timer .num { width: 54px; height: 54px; font-size: 1.6rem; box-shadow: 3px 3px 0 var(--ink); }
 .pad {
   display: block; margin: 0 auto; height: auto; max-width: 100%;
-  width: min(100%, max(300px, calc((100vh - 330px) * 4 / 3)));
-  width: min(100%, max(300px, calc((100dvh - 330px) * 4 / 3)));
+  width: min(100%, max(300px, calc((100vh - 420px) * 4 / 3)));
+  width: min(100%, max(300px, calc((100dvh - 420px) * 4 / 3)));
   background: #fff; border: var(--line) solid var(--ink); border-radius: 16px; box-shadow: var(--pop);
   touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none;
 }
 .tools { display: flex; flex-direction: column; gap: 10px; align-items: center; }
-.swatches { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.sw { width: 40px; height: 40px; padding: 0; border-radius: 50%; box-shadow: 2px 2px 0 var(--ink); }
+.swatches { display: grid; grid-template-columns: repeat(13, minmax(0, 40px)); gap: 7px; justify-content: center; width: 100%; }
+@media (max-width: 560px) { .swatches { grid-template-columns: repeat(9, minmax(0, 40px)); } }
+.sw { width: 100%; height: auto; aspect-ratio: 1; padding: 0; border-width: 2px; border-radius: 50%; box-shadow: 2px 2px 0 var(--ink); }
+.cur-col { width: 46px; height: 46px; flex: 0 0 auto; border-radius: 50%; border: var(--line) solid var(--ink); box-shadow: 3px 3px 0 var(--ink); display: grid; place-items: center; font-size: 1.4rem; }
+.cur-col.rubber::after { content: "🧽"; }
 .sw.on { outline: 4px solid var(--ink); outline-offset: 3px; }
 .tool-row { justify-content: center; }
 .seg .dotsz { display: inline-block; background: var(--ink); border-radius: 50%; vertical-align: middle; }
@@ -1780,7 +1783,15 @@ function confetti() {
    ================================================================== */
 const DRAW_TIMES = [45, 60, 90];
 const GUESS_TIME = 30;
-const INK = ["#1d1b3f", "#ff6b5e", "#ff9f1c", "#ffd23f", "#2bb24c", "#22c3a6", "#3a86ff", "#a98bff", "#ff7eb6", "#8d5a34", "#9aa0b5", "#ffffff"];
+// Two rows: bright colours on top; dark, light and skin tones underneath.
+const PALETTE = [
+  ["#e8352b", "Red"], ["#ff8a1f", "Orange"], ["#ffd23f", "Yellow"], ["#9bd63a", "Lime"], ["#2bb24c", "Green"], ["#22c3a6", "Teal"], ["#4cc3ff", "Sky blue"],
+  ["#2f6fe0", "Blue"], ["#8a5cf5", "Purple"], ["#ff7eb6", "Pink"], ["#8d5a34", "Brown"], ["#9aa0b5", "Grey"], ["#1d1b3f", "Black"],
+  ["#9b1d20", "Dark red"], ["#ffb38a", "Peach"], ["#e0a526", "Gold"], ["#1d6b35", "Dark green"], ["#bfe6ff", "Light blue"], ["#1f2a6b", "Navy"], ["#cdb8ff", "Lavender"],
+  ["#ffc9de", "Light pink"], ["#fde0c8", "Skin tone 1"], ["#e8b48c", "Skin tone 2"], ["#b97a50", "Skin tone 3"], ["#7a4a2c", "Skin tone 4"], ["#ffffff", "White"]
+];
+const INK = PALETTE.map(p => p[0]);
+const BLACK = "#1d1b3f";
 const SIZES = [4, 10, 22];
 const CW = 800, CH = 600;
 
@@ -1833,7 +1844,7 @@ async function downloadDrawing(item) {
 /* ---------- the drawing pad ---------- */
 const pad = {
   cv: null, ctx: null, cur: null,
-  color: INK[0], size: SIZES[1], tool: "pen",
+  color: BLACK, size: SIZES[1], tool: "pen",
   mount(cv) {
     this.cv = cv; this.cur = null;
     cv.width = CW; cv.height = CH;
@@ -2106,7 +2117,7 @@ function renderDraw() {
   }
 
   if (view.phase === "drawing") {
-    const swatches = INK.map(c => `<button class="sw ${pad.tool !== "eraser" && pad.color === c ? "on" : ""}" data-act="dcol" data-c="${c}" style="background:${c}" aria-label="Colour ${c}"></button>`).join("");
+    const swatches = PALETTE.map(([c, n]) => `<button class="sw ${pad.tool !== "eraser" && pad.color === c ? "on" : ""}" data-act="dcol" data-c="${c}" style="background:${c}" aria-label="${n}" title="${n}"></button>`).join("");
     app.innerHTML = `${drawTop()}
       <div class="stage draw-stage">
         <div class="row spread">
@@ -2124,6 +2135,7 @@ function renderDraw() {
         <div class="tools">
           <div class="swatches">${swatches}</div>
           <div class="row tool-row">
+            <span class="cur-col${pad.tool === "eraser" ? " rubber" : ""}" id="curcol" style="background:${pad.tool === "eraser" ? "#ffffff" : pad.color}" role="img" aria-label="Current colour"></span>
             <div class="seg" role="group" aria-label="Tool">
               <button class="${pad.tool === "pen" ? "on" : ""}" data-act="dtool" data-t="pen">✏️ Pen</button>
               <button class="${pad.tool === "fill" ? "on" : ""}" data-act="dtool" data-t="fill">🪣 Fill</button>
@@ -2288,6 +2300,8 @@ function scoreDraw(guesserId, frac = view.tLeft / view.time) {
 }
 
 function updateTools() {
+  const cur = $("#curcol");
+  if (cur) { cur.style.background = pad.tool === "eraser" ? "#ffffff" : pad.color; cur.classList.toggle("rubber", pad.tool === "eraser"); }
   document.querySelectorAll('[data-act="dcol"]').forEach(b => b.classList.toggle("on", pad.tool !== "eraser" && b.dataset.c === pad.color));
   document.querySelectorAll('[data-act="dtool"]').forEach(b => b.classList.toggle("on", b.dataset.t === pad.tool));
   document.querySelectorAll('[data-act="dsize"]').forEach(b => b.classList.toggle("on", +b.dataset.s === pad.size));
@@ -2807,7 +2821,7 @@ app.addEventListener("click", e => {
     case "dpick": pickGuess(+el.dataset.i); break;
     case "dshow": view.phase = "word"; render(); break;
     case "dnewword": if (view.skips > 0) { view.skips--; view.word = nextWord(); sound.tap(); render(); } break;
-    case "dgo": pad.tool = "pen"; pad.color = INK[0]; pad.size = SIZES[1]; view.phase = "drawing"; sound.go(); render(); window.scrollTo(0, 0); break;
+    case "dgo": pad.tool = "pen"; pad.color = BLACK; pad.size = SIZES[1]; view.phase = "drawing"; sound.go(); render(); window.scrollTo(0, 0); break;
     case "dpeek": toast(`Your word: ${view.word.w}`); break;
     case "dcol": pad.color = el.dataset.c; if (pad.tool === "eraser") pad.tool = "pen"; updateTools(); break;
     case "dtool": pad.tool = el.dataset.t; updateTools(); break;
