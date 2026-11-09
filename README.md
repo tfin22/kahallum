@@ -66,6 +66,15 @@ The topics and words live in the `WS_CATS` list in `index.html`.
 
 Tap **Share** on a game to get a code that starts with `KAHALLUM:`. Copy it and text or email it to another phone. On that phone, open Kahallum, tap **Add a shared game**, and paste the code.
 
+## Backing up and moving quizzes
+
+Tap **💾 Back up / restore** next to **My quizzes**:
+
+- **Back up** saves every quiz you've made in one go, as a backup file (`kahallum-quizzes-YYYY-MM-DD.json`) or as a backup code you can copy into a note or message.
+- **Restore** adds quizzes from a backup file, a backup code, or single-quiz share codes. Quizzes you already have are skipped, so nothing gets doubled up.
+
+This is the way to move quizzes onto another device, such as from your phone to a tablet.
+
 ## Where games are saved
 
 Games are saved in the browser on the device you made them on. If you clear the browser's data, they're gone, so share a code to yourself as a backup for games you love.

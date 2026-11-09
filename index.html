@@ -97,6 +97,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .btn-go { background: var(--sun); }
 .btn-good { background: var(--teal); }
 .btn-hot { background: var(--coral); color: #fff; }
+.file-btn { display: inline-block; }
 .btn-small { font-size: .95rem; padding: 7px 12px; box-shadow: 3px 3px 0 var(--ink); border-radius: 11px; }
 .btn-big { font-size: 1.5rem; padding: 16px 26px; }
 .icon-btn { padding: 6px 10px; font-family: var(--body); font-weight: 900; }
@@ -1205,7 +1206,7 @@ function renderHome() {
       <div class="row"><button class="btn-go" data-act="wsetup">Play ▶</button></div>
     </section>
     <section class="stack">
-      <h2>My quizzes</h2>
+      <div class="row spread"><h2>My quizzes</h2><button class="btn-small" data-act="backup">💾 Back up / restore</button></div>
       <div class="games">
         ${cards}
         <button class="panel new-card" data-act="new"><span><span class="plus">＋</span><br>New quiz</span></button>
@@ -2704,20 +2705,20 @@ function wsHint() {
    Sharing: a game becomes a short code you can text or copy to
    another phone, tablet or laptop.
    ================================================================== */
-function gameToCode(g) {
-  const slim = { t: g.title, c: g.cover, q: g.questions.map(q => [q.text, q.pic, q.time, q.answers, q.correct]) };
-  const json = JSON.stringify(slim);
-  const bytes = new TextEncoder().encode(json);
+function toB64(str) {
+  const bytes = new TextEncoder().encode(str);
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  const b64 = btoa(bin);
-  return "KAHALLUM:" + b64;
+  return btoa(bin);
 }
-function codeToGame(code) {
-  const m = String(code).replace(/\s+/g, "").match(/KAHALLUM:([A-Za-z0-9+/=]+)/i);
-  if (!m) throw new Error("bad");
-  const bytes = Uint8Array.from(atob(m[1]), ch => ch.charCodeAt(0));
-  const d = JSON.parse(new TextDecoder().decode(bytes));
+function fromB64(b64) {
+  return new TextDecoder().decode(Uint8Array.from(atob(b64), ch => ch.charCodeAt(0)));
+}
+function slimGame(g) {
+  return { t: g.title, c: g.cover, q: g.questions.map(q => [q.text, q.pic, q.time, q.answers, q.correct]) };
+}
+// Turn shared or backed-up data back into a quiz, checking every part of it.
+function gameFromSlim(d) {
   if (!d || !Array.isArray(d.q) || !d.q.length) throw new Error("bad");
   const g = {
     id: uid(), title: String(d.t || "Shared game").slice(0, 50), cover: String(d.c || "🎲").slice(0, 8),
@@ -2728,6 +2729,143 @@ function codeToGame(code) {
   };
   if (!g.questions.length) throw new Error("bad");
   return g;
+}
+function gameToCode(g) { return "KAHALLUM:" + toB64(JSON.stringify(slimGame(g))); }
+
+// Find every code in some pasted text. Codes can be split across lines and
+// have other words before or after them, so trailing words are dropped
+// until the code reads properly.
+function findCodes(text) {
+  const out = [];
+  for (const chunk of String(text).replace(/KAHALLUM/gi, "\u0000KAHALLUM").split("\u0000")) {
+    const m = chunk.match(/^KAHALLUM(-ALL)?:([A-Za-z0-9+/=\s]*)/i);
+    if (!m) continue;
+    const parts = m[2].split(/\s+/).filter(Boolean);
+    for (let n = parts.length; n > 0; n--) {
+      try { out.push({ all: !!m[1], data: JSON.parse(fromB64(parts.slice(0, n).join(""))) }); break; } catch (e) {}
+    }
+  }
+  return out;
+}
+function codeToGame(code) {
+  const c = findCodes(code).find(x => !x.all);
+  if (!c) throw new Error("bad");
+  return gameFromSlim(c.data);
+}
+
+/* ---------- back up and restore every quiz at once ---------- */
+function myQuizzes() { return store.games.filter(g => !g.example); }
+function backupCode(games) { return "KAHALLUM-ALL:" + toB64(JSON.stringify({ v: 1, g: games.map(slimGame) })); }
+function backupFile(games) {
+  return JSON.stringify({
+    app: "Kahallum", type: "quiz-backup", version: 1, exported: new Date().toISOString(),
+    quizzes: games.map(g => ({ title: g.title, cover: g.cover, questions: g.questions.map(q => ({ text: q.text, pic: q.pic, time: q.time, answers: q.answers, correct: q.correct })) }))
+  }, null, 2);
+}
+
+// Accepts a backup file, a backup code, or one or more single-quiz share codes.
+function quizzesFromText(text) {
+  const out = [];
+  const keep = d => { try { out.push(gameFromSlim(d)); } catch (e) { /* skip anything broken */ } };
+  let json = null;
+  try { json = JSON.parse(text); } catch (e) {}
+  if (json && Array.isArray(json.quizzes)) {
+    json.quizzes.forEach(x => x && Array.isArray(x.questions) && keep({ t: x.title, c: x.cover, q: x.questions.map(q => q && [q.text, q.pic, q.time, q.answers, q.correct]).filter(Boolean) }));
+    return out;
+  }
+  for (const c of findCodes(text)) {
+    if (c.all) (Array.isArray(c.data.g) ? c.data.g : []).forEach(keep);
+    else keep(c.data);
+  }
+  return out;
+}
+
+function addQuizzes(games) {
+  const sig = g => JSON.stringify(slimGame(g));
+  const have = new Set(store.games.map(sig));
+  let added = 0, dupes = 0;
+  for (const g of games) {
+    const k = sig(g);
+    if (have.has(k)) { dupes++; continue; }
+    have.add(k); store.saveGame(g); added++;
+  }
+  return { added, dupes };
+}
+
+async function saveFile(filename, blob) {
+  try {
+    const dl = window.claude && typeof window.claude.use === "function" ? await window.claude.use("downloads") : null;
+    if (dl) { await dl.save({ filename, data: blob }); return; }
+  } catch (e) {
+    if (e && e.code !== "unavailable") return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function backupModal() {
+  const mine = myQuizzes();
+  const n = mine.length;
+  modal(`
+    <h2>Back up and restore quizzes</h2>
+    <section class="stack" style="gap:10px">
+      <h3>⬇️ Back up</h3>
+      ${n ? `<p>Save all ${n} of your quiz${n === 1 ? "" : "zes"} in one go. Keep the file or code somewhere safe, or use it to move them to another device.</p>
+      <div class="row">
+        <button class="btn-go" id="bk-file-save">💾 Save backup file</button>
+        <button id="bk-code-show">📋 Get backup code</button>
+      </div>
+      <div id="bk-code-wrap" class="stack" style="gap:8px" hidden>
+        <textarea id="bk-code-out" class="code-box" readonly rows="4"></textarea>
+        <div class="row" style="justify-content:flex-end"><button class="btn-small" id="bk-copy">📋 Copy code</button></div>
+      </div>` : `<p class="muted">You haven't made any quizzes yet. Make one and it can be backed up here.</p>`}
+    </section>
+    <section class="stack" style="gap:10px">
+      <h3>⬆️ Restore</h3>
+      <p>Add quizzes from a backup file or code. Share codes for single quizzes work too. Quizzes you already have won't be doubled up.</p>
+      <div class="row"><label class="btn btn-small file-btn">📂 Choose backup file<input type="file" id="bk-file" accept=".json,.txt,application/json,text/plain" hidden></label></div>
+      <textarea id="bk-code-in" class="code-box" rows="3" placeholder="Or paste a backup code here (KAHALLUM-ALL:…)"></textarea>
+      <div class="row" style="justify-content:flex-end"><button class="btn-good" id="bk-restore">Add quizzes</button></div>
+      <p id="bk-msg" role="status" hidden></p>
+    </section>
+    <div class="row" style="justify-content:flex-end"><button data-close>Done</button></div>`, (v) => {
+    const msg = (text, bad) => { const m = $("#bk-msg", v); m.textContent = text; m.className = bad ? "warn" : ""; m.hidden = false; };
+    const restore = text => {
+      const games = quizzesFromText(text);
+      if (!games.length) { msg("That didn't contain any quizzes. Check it's a Kahallum backup file, or that you copied the whole code.", true); return; }
+      const { added, dupes } = addQuizzes(games);
+      if (added) { sound.yay(); render(); }
+      msg(added
+        ? `Added ${added} quiz${added === 1 ? "" : "zes"}.${dupes ? ` ${dupes} ${dupes === 1 ? "was" : "were"} already here.` : ""}`
+        : `${dupes === 1 ? "That quiz is" : "Those quizzes are"} already here.`);
+    };
+    if (n) {
+      $("#bk-file-save", v).onclick = () => {
+        const day = new Date().toISOString().slice(0, 10);
+        saveFile(`kahallum-quizzes-${day}.json`, new Blob([backupFile(mine)], { type: "application/json" }));
+      };
+      $("#bk-code-show", v).onclick = () => { $("#bk-code-out", v).value = backupCode(mine); $("#bk-code-wrap", v).hidden = false; };
+      $("#bk-copy", v).onclick = () => {
+        const ta = $("#bk-code-out", v), code = ta.value;
+        const fallback = () => { ta.focus(); ta.select(); toast("Code selected: copy it now"); };
+        try { navigator.clipboard.writeText(code).then(() => toast("Copied!"), fallback); } catch (e) { fallback(); }
+      };
+    }
+    $("#bk-file", v).onchange = e => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      f.text().then(restore, () => msg("That file couldn't be opened.", true));
+      e.target.value = "";
+    };
+    $("#bk-restore", v).onclick = () => {
+      const t = $("#bk-code-in", v).value.trim();
+      if (!t) { msg("Paste a backup code first, or choose a backup file.", true); return; }
+      restore(t);
+    };
+  });
 }
 
 function modal(html, wire) {
@@ -2773,8 +2911,8 @@ function importGame() {
     $("#imp-go", v).onclick = () => {
       try {
         const g = codeToGame($("#imp-code", v).value);
-        store.saveGame(g);
-        close(); toast("Added “" + g.title + "”"); render();
+        const { added } = addQuizzes([g]);
+        close(); toast(added ? "Added “" + g.title + "”" : "You already have “" + g.title + "”"); if (added) render();
       } catch (e) {
         const m = $("#imp-msg", v); m.textContent = "That code didn't work. Check you copied all of it, from KAHALLUM: to the end."; m.hidden = false;
       }
@@ -2813,6 +2951,7 @@ app.addEventListener("click", e => {
     case "share": { const g = findGame(el.dataset.id); if (g) shareGame(g); break; }
     case "del": { const g = findGame(el.dataset.id); if (g) confirmDelete(g); break; }
     case "import": importGame(); break;
+    case "backup": backupModal(); break;
 
     /* editor */
     case "tick": {
