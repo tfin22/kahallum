@@ -62,7 +62,18 @@ Every puzzle is made fresh from the topic's word list, so there's always a new o
 
 The topics and words live in the `WS_CATS` list in `index.html`.
 
-## Sharing a quiz with another device
+## Sharing quizzes with friends (or a whole class)
+
+Tap **📤 Share** on any quiz to get:
+
+- a **link** to copy or send (in a message, email or a class page), and
+- a **QR code** that can be shown on a screen, saved or printed for people to scan.
+
+Opening the link shows the quiz with **▶ Play now** and **➕ Add to my quizzes**. No app, no accounts and no sign-up.
+
+The quiz is packed inside the link itself (after the `#`), so it never goes to a server and nothing about the people playing is stored anywhere. Links point at `https://tfin22.github.io/kahallum/`, which needs to stay public with GitHub Pages switched on.
+
+## Sharing a quiz with another device using a code
 
 Tap **Share** on a game to get a code that starts with `KAHALLUM:`. Copy it and text or email it to another phone. On that phone, open Kahallum, tap **Add a shared game**, and paste the code.
 

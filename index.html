@@ -335,6 +335,15 @@ label.lbl { font-size: .85rem; text-transform: uppercase; letter-spacing: 1px; c
 .ws-done { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; background: var(--sun); }
 .ws-clock { font-variant-numeric: tabular-nums; }
 
+/* ---------- shared quizzes ---------- */
+.qr-box { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.qr-box img { width: min(100%, 260px); height: auto; image-rendering: pixelated; border: var(--line) solid var(--ink); border-radius: 12px; background: #fff; }
+.code-details summary { cursor: pointer; font-weight: 800; color: var(--ink-soft); }
+.code-details[open] { display: flex; flex-direction: column; gap: 8px; }
+.shared-card { gap: 16px; }
+.shared-cover { font-size: clamp(3.5rem, 14vw, 5.5rem); line-height: 1; }
+.shared-peek { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 6px; font-weight: 800; }
+
 /* ---------- modal + toast ---------- */
 .veil { position: fixed; inset: 0; background: rgba(29, 27, 63, .55); display: grid; place-items: center; padding: 20px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px)); z-index: 50; }
 .veil .panel { width: min(560px, 100%); max-height: 90vh; overflow: auto; }
@@ -1153,7 +1162,7 @@ function topbar(extra = "") {
 }
 
 function render() {
-  const fn = { home: renderHome, edit: renderEdit, setup: renderSetup, play: renderPlay, packs: renderPacks, pack: renderPack, dsetup: renderDrawSetup, draw: renderDraw, gallery: renderGallery, wsetup: renderWsSetup, ws: renderWordSearch }[view.name] || renderHome;
+  const fn = { home: renderHome, edit: renderEdit, setup: renderSetup, play: renderPlay, packs: renderPacks, pack: renderPack, dsetup: renderDrawSetup, draw: renderDraw, gallery: renderGallery, wsetup: renderWsSetup, ws: renderWordSearch, shared: renderShared }[view.name] || renderHome;
   fn();
 }
 
@@ -2792,6 +2801,87 @@ function addQuizzes(games) {
   return { added, dupes };
 }
 
+/* ---------- share links and QR codes ---------- */
+// The whole quiz travels inside the link (after the #), squashed down to keep
+// it short. Nothing is stored on a server.
+const SITE_URL = "https://tfin22.github.io/kahallum/";
+const QR_LIB = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+
+function shareBase() {
+  return /^https?:$/.test(location.protocol) && /github\.io$/.test(location.hostname) ? location.origin + location.pathname : SITE_URL;
+}
+function bytesToB64url(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64urlToBytes(str) {
+  const b64 = str.replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(b64 + "===".slice((b64.length + 3) % 4)), c => c.charCodeAt(0));
+}
+async function squash(bytes, how) {
+  const stream = new Blob([bytes]).stream().pipeThrough(how === "in" ? new CompressionStream("deflate-raw") : new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function packQuiz(g) {
+  const bytes = new TextEncoder().encode(JSON.stringify(slimGame(g)));
+  if (window.CompressionStream) { try { return "z" + bytesToB64url(await squash(bytes, "in")); } catch (e) {} }
+  return "u" + bytesToB64url(bytes);
+}
+async function unpackQuiz(str) {
+  const kind = str[0], bytes = b64urlToBytes(str.slice(1));
+  const raw = kind === "z" ? await squash(bytes, "out") : bytes;
+  return gameFromSlim(JSON.parse(new TextDecoder().decode(raw)));
+}
+async function shareLink(g) { return shareBase() + "#q=" + await packQuiz(g); }
+
+function loadQR() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  return new Promise((res, rej) => {
+    const sc = document.createElement("script");
+    sc.src = QR_LIB; sc.onload = () => window.qrcode ? res(window.qrcode) : rej(new Error("no qr"));
+    sc.onerror = rej;
+    document.head.appendChild(sc);
+  });
+}
+
+// Someone opened a share link: show the quiz and offer to play or keep it.
+async function openSharedLink() {
+  const h = location.hash || "";
+  if (!h.startsWith("#q=")) return;
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+  try {
+    const g = await unpackQuiz(decodeURIComponent(h.slice(3)));
+    go("shared", { game: g });
+  } catch (e) {
+    toast("That quiz link didn't work. Ask for it to be sent again.");
+  }
+}
+window.addEventListener("hashchange", openSharedLink);
+
+function renderShared() {
+  const g = view.game;
+  const have = new Set(store.games.map(x => JSON.stringify(slimGame(x)))).has(JSON.stringify(slimGame(g)));
+  app.innerHTML = `
+    ${topbar()}
+    <section class="panel stack shared-card">
+      <p class="chip" style="align-self:flex-start">🎁 A quiz has been shared with you</p>
+      <div class="row" style="align-items:center;gap:16px">
+        <span class="shared-cover">${esc(g.cover || "🎲")}</span>
+        <div class="stack" style="gap:4px;min-width:0">
+          <h1 style="font-size:clamp(2rem,7vw,3.4rem)">${esc(g.title)}</h1>
+          <p class="muted">${g.questions.length} question${g.questions.length === 1 ? "" : "s"}</p>
+        </div>
+      </div>
+      <ol class="shared-peek">${g.questions.slice(0, 3).map(q => `<li>${esc(q.pic || "")} ${esc(q.text)}</li>`).join("")}</ol>
+      ${g.questions.length > 3 ? `<p class="muted">…and ${g.questions.length - 3} more question${g.questions.length - 3 === 1 ? "" : "s"}.</p>` : ""}
+      <div class="row">
+        <button class="btn-go btn-big" data-act="sharedplay">▶ Play now</button>
+        ${have ? `<span class="chip">✓ Already in your quizzes</span>` : `<button class="btn-good btn-big" data-act="sharedkeep">➕ Add to my quizzes</button>`}
+      </div>
+    </section>`;
+}
+
 async function saveFile(filename, blob) {
   try {
     const dl = window.claude && typeof window.claude.use === "function" ? await window.claude.use("downloads") : null;
@@ -2882,19 +2972,48 @@ function modal(html, wire) {
 
 function shareGame(g) {
   const code = gameToCode(g);
+  const canSend = typeof navigator.share === "function";
   modal(`
     <h2>Share “${esc(g.title)}”</h2>
-    <p>Copy this code and send it to another phone or tablet (by text or email). There, open Kahallum, tap <b>Add a shared game</b>, and paste it in.</p>
-    <textarea id="share-code" class="code-box" readonly rows="5">${esc(code)}</textarea>
-    <div class="row" style="justify-content:flex-end">
-      <button data-close>Done</button>
-      <button class="btn-go" id="copy">📋 Copy code</button>
-    </div>`, (v) => {
-    const ta = $("#share-code", v);
-    $("#copy", v).onclick = () => {
-      const fallback = () => { ta.focus(); ta.select(); toast("Code selected: copy it now"); };
-      try { navigator.clipboard.writeText(code).then(() => toast("Copied!"), fallback); } catch (e) { fallback(); }
+    <p>Send this link to anyone, or let them scan the QR code. They can play the quiz straight away or add it to their own Kahallum.</p>
+    <div class="row" style="flex-wrap:nowrap">
+      <input id="share-link" class="grow" readonly value="Making the link…" aria-label="Share link">
+      <button class="btn-go" id="copy-link" disabled>📋 Copy link</button>
+    </div>
+    ${canSend ? `<button id="send-link" disabled style="align-self:flex-start">📤 Send…</button>` : ""}
+    <div class="qr-box" id="qr-box"><p class="muted">Making the QR code…</p></div>
+    <details class="code-details">
+      <summary>Share with a code instead</summary>
+      <p>Paste this into <b>Add a shared game</b> on another device.</p>
+      <textarea id="share-code" class="code-box" readonly rows="4">${esc(code)}</textarea>
+      <button class="btn-small" id="copy">📋 Copy code</button>
+    </details>
+    <div class="row" style="justify-content:flex-end"><button data-close>Done</button></div>`, async (v) => {
+    const copy = (text, el) => {
+      const fallback = () => { el.focus(); el.select(); toast("Selected: copy it now"); };
+      try { navigator.clipboard.writeText(text).then(() => toast("Copied!"), fallback); } catch (e) { fallback(); }
     };
+    $("#copy", v).onclick = () => copy(code, $("#share-code", v));
+    let url;
+    try { url = await shareLink(g); } catch (e) { $("#share-link", v).value = "Sorry, the link couldn't be made. Use a code instead."; return; }
+    const input = $("#share-link", v);
+    input.value = url;
+    $("#copy-link", v).disabled = false;
+    $("#copy-link", v).onclick = () => copy(url, input);
+    const send = $("#send-link", v);
+    if (send) { send.disabled = false; send.onclick = () => navigator.share({ title: g.title, text: `Try my Kahallum quiz: ${g.title}`, url }).catch(() => {}); }
+    const box = $("#qr-box", v);
+    try {
+      const qrcode = await loadQR();
+      const qr = qrcode(0, "L");
+      qr.addData(url);
+      qr.make();
+      const img = qr.createDataURL(8, 4);
+      box.innerHTML = `<img src="${img}" alt="QR code for ${esc(g.title)}"><button class="btn-small" id="qr-save">💾 Save QR code</button>`;
+      $("#qr-save", v).onclick = () => saveFile(`kahallum-${g.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "quiz"}-qr.gif`, dataUrlToBlob(img));
+    } catch (e) {
+      box.innerHTML = `<p class="muted">The QR code couldn't be made here${url.length > 2500 ? " because this quiz is very long" : ""}. The link still works.</p>`;
+    }
   });
 }
 
@@ -2952,6 +3071,8 @@ app.addEventListener("click", e => {
     case "del": { const g = findGame(el.dataset.id); if (g) confirmDelete(g); break; }
     case "import": importGame(); break;
     case "backup": backupModal(); break;
+    case "sharedplay": go("setup", { game: view.game }); break;
+    case "sharedkeep": { const { added } = addQuizzes([view.game]); toast(added ? `Added “${view.game.title}” to your quizzes` : "You already have this quiz"); go("home"); break; }
 
     /* editor */
     case "tick": {
@@ -3135,6 +3256,7 @@ store.loadLocal();
 gallery.load().then(() => { if (view.name === "home" || view.name === "gallery") renderKeepScroll(); });
 render();
 store.connect();
+openSharedLink();
 </script>
 </body>
 </html>
